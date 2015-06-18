@@ -13,18 +13,17 @@ class BackupProcedure extends Procedure {
      * @param string $destination
      * @param string $destinationPath
      * @param string $compression
-     * @throws \BackupManager\Filesystems\FilesystemTypeNotSupported
-     * @throws \BackupManager\Config\ConfigFieldNotFound
+     * @param string $filename
      * @throws \BackupManager\Compressors\CompressorTypeNotSupported
      * @throws \BackupManager\Databases\DatabaseTypeNotSupported
-     * @throws \BackupManager\Config\ConfigNotFoundForConnection
+     * @throws \BackupManager\Filesystems\FilesystemTypeNotSupported
      */
-    public function run($database, $destination, $destinationPath, $compression) {
+    public function run($database, $destination, $destinationPath, $compression, $filename) {
         $sequence = new Sequence;
 
         // begin the life of a new working file
         $localFilesystem = $this->filesystems->get('local');
-        $workingFile = $this->getWorkingFile('local');
+        $workingFile = $this->getWorkingFile('local', $filename);
 
         // dump the database
         $sequence->add(new Tasks\Database\DumpDatabase(
@@ -40,12 +39,14 @@ class BackupProcedure extends Procedure {
             $workingFile,
             $this->shellProcessor
         ));
-        $workingFile = $compressor->getCompressedPath($workingFile);
+
+        $workingFileFull = $compressor->getCompressedPath($workingFile);
+        $workingFile = basename($workingFileFull);
 
         // upload the archive
         $sequence->add(new Tasks\Storage\TransferFile(
             $localFilesystem, basename($workingFile),
-            $this->filesystems->get($destination), $compressor->getCompressedPath($destinationPath)
+            $this->filesystems->get($destination), $destinationPath . $workingFile
         ));
 
         // cleanup the local archive
